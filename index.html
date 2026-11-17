@@ -12,7 +12,7 @@
   --tank:#f6f9fc; --wall:#3b4a5c; --water:#1f6fd6; --water-fill:rgba(64,140,230,.16);
   --sol-fill:rgba(64,140,230,.22); --solute:#ef7d16; --solute-edge:#b85600;
   --membrane:#6b5b95; --piston:#566579; --accent:#0d7c86; --accent-ink:#ffffff;
-  --good:#1c8a4c; --warn:#c2410c; --soft:#e6edf5;
+  --good:#1c8a4c; --trace:#d6247a; --warn:#c2410c; --soft:#e6edf5;
   --font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
 }
 @media (prefers-color-scheme: dark){
@@ -21,7 +21,7 @@
     --tank:#0f1924; --wall:#a9b8c8; --water:#5aa8ff; --water-fill:rgba(70,150,255,.16);
     --sol-fill:rgba(70,150,255,.24); --solute:#ff9a3d; --solute-edge:#ffd0a0;
     --membrane:#b3a3e6; --piston:#8b9bb0; --accent:#35b8c2; --accent-ink:#06222a;
-    --good:#4fd08a; --warn:#ff9466; --soft:#1e2b3a; color-scheme:dark;
+    --good:#4fd08a; --trace:#ff6fb5; --warn:#ff9466; --soft:#1e2b3a; color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
@@ -29,7 +29,7 @@
   --tank:#0f1924; --wall:#a9b8c8; --water:#5aa8ff; --water-fill:rgba(70,150,255,.16);
   --sol-fill:rgba(70,150,255,.24); --solute:#ff9a3d; --solute-edge:#ffd0a0;
   --membrane:#b3a3e6; --piston:#8b9bb0; --accent:#35b8c2; --accent-ink:#06222a;
-  --good:#4fd08a; --warn:#ff9466; --soft:#1e2b3a; color-scheme:dark;
+  --good:#4fd08a; --trace:#ff6fb5; --warn:#ff9466; --soft:#1e2b3a; color-scheme:dark;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5;
@@ -80,6 +80,15 @@ dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
 #graph{display:block;width:100%;height:190px}
 .life p{margin:10px 0 0;font-size:.92rem}
 .life .hint{color:var(--muted)}
+.dot-t{width:13px;height:13px;border:3px solid var(--trace);background:var(--card)}
+.tbl{overflow-x:auto;margin-top:10px}
+table{border-collapse:collapse;width:100%;font-size:.85rem;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-weight:600}
+.sub{margin:0;font-size:.88rem;color:var(--muted)}
+.prog{height:10px;border-radius:5px;background:var(--soft);overflow:hidden;margin-top:10px}
+.prog div{height:100%;width:0;background:var(--good);transition:width .2s}
+#mMsg{margin:8px 0 0;font-size:.9rem;font-weight:600;font-variant-numeric:tabular-nums}
 ul.simple{margin:8px 0 0;padding-left:1.2em;font-size:.88rem;color:var(--muted)}
 </style>
 </head>
@@ -97,6 +106,7 @@ ul.simple{margin:8px 0 0;padding-left:1.2em;font-size:.88rem;color:var(--muted)}
         <div class="legend">
           <span><i class="dot-w"></i>물 분자 (막의 구멍 통과)</span>
           <span><i class="dot-s"></i>용질 입자 (막에서 튕김)</span>
+          <span><i class="dot-t"></i>추적 중인 물 분자 1개</span>
         </div>
         <p class="note">※ 실제로는 수위 차가 수백 m나 되기 때문에 화면에는 축소해서 그렸습니다. 용기 높이 전체가 600 m에 해당합니다. 반대로 입자와 막의 구멍은 눈에 보이도록 실제보다 훨씬 크게 그렸습니다.</p>
         <div class="btns">
@@ -122,6 +132,29 @@ ul.simple{margin:8px 0 0;padding-left:1.2em;font-size:.88rem;color:var(--muted)}
           <label for="sP">용액 쪽에 가하는 압력 P</label><output id="oP" for="sP"></output>
           <input id="sP" type="range" min="0" max="60" step="1" value="0">
         </div>
+      </section>
+
+      <section class="card">
+        <h2>실험 기록</h2>
+        <p class="sub">동적 평형이 되었을 때 기록하면 수위 차로 구한 삼투압(수압 + P)을 이론값과 비교할 수 있습니다.</p>
+        <div class="btns">
+          <button id="bRec" type="button" class="primary">지금 값 기록</button>
+          <button id="bRecClear" type="button">기록 지우기</button>
+        </div>
+        <div class="tbl" id="recWrap" hidden>
+          <table>
+            <thead><tr><th>#</th><th>C (mol/L)</th><th>T (℃)</th><th>P (atm)</th><th>이론 π</th><th>수위 차</th><th>측정 π</th><th>오차</th><th>상태</th></tr></thead>
+            <tbody id="recBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>도전: 물의 이동 멈추기</h2>
+        <p class="sub">농도와 온도가 무작위로 정해집니다. 압력 P만 움직여서 수위 차를 ±15 m 안에 5초 동안 붙잡아 보세요.</p>
+        <div class="btns"><button id="bMission" type="button">도전 시작</button></div>
+        <div class="prog"><div id="mBar"></div></div>
+        <p id="mMsg"></p>
       </section>
     </div>
 
@@ -182,6 +215,7 @@ var sC=$("sC"), sT=$("sT"), sP=$("sP");
 var C=0.5, T=25, P=0, running=false, speedMul=1, simT=0;
 var water=[], solute=[], nL=N0, nR=N0, dispL=0.5, dispR=0.5;
 var crossLR=[], crossRL=[], samples=[], fx=[], limitHit=false, lastSample=-1;
+var trail=[], recs=[], lastEq=false, mission={on:false,hold:0,last:0};
 
 function fOf(n){return 0.5*n/N0}
 function surfY(f){return TK.b-f*TH}
@@ -200,7 +234,7 @@ function resetWater(){
   for(i=0;i<N0;i++) water.push(newParticle(0,WR,top));
   for(i=0;i<N0;i++) water.push(newParticle(1,WR,top));
   solute=[]; syncSolute();
-  crossLR=[]; crossRL=[]; samples=[]; fx=[]; simT=0; lastSample=-1; limitHit=false;
+  crossLR=[]; crossRL=[]; samples=[]; fx=[]; trail=[]; simT=0; lastSample=-1; limitHit=false;
 }
 function syncSolute(){
   var target=Math.round(C*SOL_PER_M);
@@ -254,6 +288,7 @@ function step(dt){
     if(p.x<MX+MH+SR){p.x=MX+MH+SR; p.ux=Math.abs(p.ux);}      // 용질은 막에서 항상 튕긴다
     if(p.x>TK.r-SR){p.x=TK.r-SR; p.ux=-Math.abs(p.ux);}
   }
+  trail.push(water[0].x,water[0].y); if(trail.length>120) trail.splice(0,2);
   while(crossLR.length&&crossLR[0]<simT-10) crossLR.shift();
   while(crossRL.length&&crossRL[0]<simT-10) crossRL.shift();
   while(fx.length&&fx[0].t<simT-0.4) fx.shift();
@@ -266,7 +301,7 @@ function inPore(y,common){ return y>common && ((y-TK.t)%PORE)>=PORE/2; }
 var K={};
 function readColors(){
   var cs=getComputedStyle(document.documentElement);
-  ["tank","wall","water","water-fill","sol-fill","solute","solute-edge","membrane","piston","ink","muted","line","card","accent","warn"]
+  ["tank","wall","water","water-fill","sol-fill","solute","solute-edge","membrane","piston","ink","muted","line","card","accent","warn","trace","good"]
     .forEach(function(n){K[n]=cs.getPropertyValue("--"+n).trim()});
   K.font=cs.getPropertyValue("--font");
 }
@@ -281,16 +316,49 @@ function draw(){
   fitCanvas(cv);
   var k=cv.width/WW; ctx.setTransform(k,0,0,k,0,0); ctx.clearRect(0,0,WW,WH);
   var sL=surfY(dispL), sR=surfY(dispR), i,p,y;
-  ctx.fillStyle=K["water-fill"]; ctx.fillRect(TK.l,sL,MX-MH-TK.l,TK.b-sL);
-  ctx.fillStyle=K["sol-fill"];   ctx.fillRect(MX+MH,sR,TK.r-MX-MH,TK.b-sR);
-  ctx.strokeStyle=K.water; ctx.lineWidth=2; ctx.beginPath();
-  ctx.moveTo(TK.l,sL); ctx.lineTo(MX-MH,sL); ctx.moveTo(MX+MH,sR); ctx.lineTo(TK.r,sR); ctx.stroke();
+  var gr=ctx.createLinearGradient(0,Math.min(sL,sR),0,TK.b), wt=simT*2.2, x;
+  gr.addColorStop(0,K["water-fill"]); gr.addColorStop(1,K["sol-fill"]);
+  var wave=function(xx){return sL+Math.sin(xx*0.045+wt)*2.2+Math.sin(xx*0.11-wt*1.3)*1.1};
+  ctx.fillStyle=gr; ctx.beginPath(); ctx.moveTo(TK.l,TK.b);
+  for(x=TK.l;x<MX-MH;x+=8) ctx.lineTo(x,wave(x));
+  ctx.lineTo(MX-MH,wave(MX-MH)); ctx.lineTo(MX-MH,TK.b); ctx.closePath(); ctx.fill();
+  ctx.fillRect(MX+MH,sR,TK.r-MX-MH,TK.b-sR);
+  ctx.globalAlpha=C/1.2*0.13; ctx.fillStyle=K.solute; ctx.fillRect(MX+MH,sR,TK.r-MX-MH,TK.b-sR); ctx.globalAlpha=1;   // 농도가 진할수록 색이 진해진다
+  ctx.strokeStyle=K.water; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(TK.l,wave(TK.l));
+  for(x=TK.l+8;x<MX-MH;x+=8) ctx.lineTo(x,wave(x));
+  ctx.lineTo(MX-MH,wave(MX-MH)); ctx.moveTo(MX+MH,sR); ctx.lineTo(TK.r,sR); ctx.stroke();
+
+  ctx.fillStyle=K.water; ctx.globalAlpha=0.16; ctx.beginPath();
+  for(i=0;i<water.length;i++){p=water[i]; ctx.moveTo(p.x+WR*2.4,p.y); ctx.arc(p.x,p.y,WR*2.4,0,6.2832);}
+  ctx.fill(); ctx.globalAlpha=1;
 
   ctx.fillStyle=K.water; ctx.beginPath();
   for(i=0;i<water.length;i++){p=water[i]; ctx.moveTo(p.x+WR,p.y); ctx.arc(p.x,p.y,WR,0,6.2832);}
   ctx.fill();
   ctx.fillStyle=K.solute; ctx.strokeStyle=K["solute-edge"]; ctx.lineWidth=1.5;
-  for(i=0;i<solute.length;i++){p=solute[i]; ctx.beginPath(); ctx.arc(p.x,p.y,SR,0,6.2832); ctx.fill(); ctx.stroke();}
+  for(i=0;i<solute.length;i++){p=solute[i];
+    var sg=ctx.createRadialGradient(p.x-2.5,p.y-2.5,0.5,p.x,p.y,SR);
+    sg.addColorStop(0,"rgba(255,255,255,.9)"); sg.addColorStop(0.45,K.solute); sg.addColorStop(1,K.solute);
+    ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(p.x,p.y,SR,0,6.2832); ctx.fill(); ctx.stroke();}
+
+  // 추적 중인 물 분자와 지나온 길
+  ctx.strokeStyle=K.trace; ctx.lineWidth=2; ctx.lineCap="round";
+  for(i=2;i<trail.length;i+=2){ if(Math.abs(trail[i]-trail[i-2])>20) continue;
+    ctx.globalAlpha=i/trail.length*0.8; ctx.beginPath(); ctx.moveTo(trail[i-2],trail[i-1]); ctx.lineTo(trail[i],trail[i+1]); ctx.stroke(); }
+  ctx.globalAlpha=1; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(water[0].x,water[0].y,7,0,6.2832); ctx.stroke();
+  ctx.fillStyle=K.trace; ctx.beginPath(); ctx.arc(water[0].x,water[0].y,3,0,6.2832); ctx.fill();
+
+  // 알짜 이동 방향 화살표
+  var fl=crossLR.length, fr=crossRL.length, fn=fl-fr;
+  if(running && Math.abs(fn)>1.5*Math.sqrt(fl+fr)+2){
+    var dir=fn>0?1:-1, str=Math.min(1,Math.abs(fn)/60), ay=(Math.max(sL,sR)+TK.b)/2, sz=12+10*str, ph=(simT*45)%30, j;
+    ctx.strokeStyle=dir>0?K.water:K.warn; ctx.lineWidth=5; ctx.lineJoin="round";
+    for(j=0;j<4;j++){ var off=j*30+ph-60, ax=MX+dir*off;
+      ctx.globalAlpha=Math.max(0,1-Math.abs(off)/62)*(0.35+0.55*str);
+      ctx.beginPath(); ctx.moveTo(ax-dir*sz*0.6,ay-sz); ctx.lineTo(ax,ay); ctx.lineTo(ax-dir*sz*0.6,ay+sz); ctx.stroke(); }
+    ctx.globalAlpha=1;
+  }
+  ctx.lineCap="butt";
 
   // 통과 순간 표시
   ctx.strokeStyle=K.water; ctx.lineWidth=2;
@@ -383,7 +451,14 @@ function ui(){
   else if(Math.abs(net)<=thr){ netTxt="거의 0 (동적 평형)"; }
   else if(net>0){ netTxt="물 → 용액 (삼투)"; }
   else { netTxt="용액 → 물"+(P>pi?" (역삼투)":""); }
-  $("vNet").textContent=netTxt;
+  $("vNet").textContent=netTxt; lastEq=netTxt.indexOf("평형")>=0;
+  if(mission.on && running){
+    var md=simT-mission.last; mission.last=simT;
+    mission.hold=Math.abs(dh)<15?mission.hold+md:0;
+    $("mBar").style.width=Math.min(100,mission.hold/5*100)+"%";
+    if(mission.hold>=5){ mission.on=false; $("mMsg").textContent="성공! "+Math.round(simT)+"초 걸렸습니다. P를 π와 거의 같게 맞추면 물의 알짜 이동이 멈춥니다."; }
+    else $("mMsg").textContent="유지 시간 "+mission.hold.toFixed(1)+" / 5.0초 (지금 수위 차 "+fmtM(dh)+")";
+  }
   if(!running){ ct=simT>0?"일시정지":"대기 중"; }
   else if(limitHit){ ct="용기 한계 도달"; cls+=" rev"; }
   else if(netTxt.indexOf("평형")>=0){ ct="동적 평형"; cls+=" eq"; }
@@ -413,11 +488,30 @@ function setRun(v){ running=v; ui(); }
 $("bStart").addEventListener("click",function(){setRun(true)});
 $("bPause").addEventListener("click",function(){setRun(false)});
 $("bReset").addEventListener("click",function(){
-  sC.value=0.5; sT.value=25; sP.value=0; running=false; C=0.5;T=25;P=0; resetWater();
+  sC.value=0.5; sT.value=25; sP.value=0; running=false; C=0.5;T=25;P=0; resetWater(); endMission();
   $("lifeBox").innerHTML='<p class="hint">버튼을 누르면 그 상황에 맞는 조건으로 바뀌고 바로 실험이 시작됩니다.</p>'; ui();
 });
 $("bSpeed").addEventListener("click",function(){ speedMul=speedMul===1?2:speedMul===2?4:1; this.textContent="배속 ×"+speedMul; });
+function endMission(){ mission.on=false; mission.hold=0; $("mBar").style.width="0"; $("mMsg").textContent=""; }
+function renderRecs(){
+  var h="", i, r;
+  for(i=0;i<recs.length;i++){ r=recs[i];
+    h+="<tr><td>"+(i+1)+"</td><td>"+r.C.toFixed(2)+"</td><td>"+r.T+"</td><td>"+r.P+"</td><td>"+r.pi.toFixed(1)+" atm</td><td>"+fmtM(r.dh)+"</td><td>"+r.m.toFixed(1)+" atm</td><td>"+
+      (r.pi>0?((r.m-r.pi)/r.pi*100>0?"+":"")+((r.m-r.pi)/r.pi*100).toFixed(1)+" %":"–")+"</td><td>"+(r.eq?"평형":"이동 중")+"</td></tr>"; }
+  $("recBody").innerHTML=h; $("recWrap").hidden=!recs.length;
+}
+$("bRec").addEventListener("click",function(){
+  var dh=dhReal(); recs.push({C:C,T:T,P:P,pi:piNow(),dh:dh,m:dh/ATM_M+P,eq:lastEq&&running});
+  if(recs.length>12) recs.shift(); renderRecs();
+});
+$("bRecClear").addEventListener("click",function(){ recs=[]; renderRecs(); });
+$("bMission").addEventListener("click",function(){
+  var c=Math.round(rnd(0.4,1.2)*20)/20, t=Math.round(rnd(10,60));
+  preset(c,t,0,'<p class="hint">버튼을 누르면 그 상황에 맞는 조건으로 바뀌고 바로 실험이 시작됩니다.</p>');
+  mission.on=true; mission.hold=0; mission.last=0;
+});
 function preset(c,t,p,html){
+  endMission();
   sC.value=c; sT.value=t; sP.value=p; C=c;T=t;P=p; resetWater(); $("lifeBox").innerHTML=html; setRun(true);
 }
 $("bCabbage").addEventListener("click",function(){
