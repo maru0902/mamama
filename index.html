@@ -181,10 +181,12 @@ ul.simple{margin:8px 0 0;padding-left:1.2em;font-size:.88rem;color:var(--muted)}
           <dt>알짜 이동 방향</dt><dd id="vNet">–</dd>
           <dt>현재 수위 차 (용액 − 물)</dt><dd id="vDh">0 m</dd>
           <dt>최근 60초 평균 수위 차</dt><dd id="vAvg">–</dd>
+          <dt id="kCur" hidden>현재 입자 농도</dt><dd id="vCur" hidden>–</dd>
+          <dt id="kPiCur" hidden>현재 농도 기준 삼투압</dt><dd id="vPiCur" hidden>–</dd>
           <dt>수위 차로 생긴 수압</dt><dd id="vHyd">0.0 atm</dd>
         </dl>
         <div class="bal" aria-label="삼투압과 수압 더하기 압력 비교">
-          <span>π</span><div class="track"><div id="barPi" style="background:var(--solute)"></div></div><em id="tPi"></em>
+          <span id="lPi">π</span><div class="track"><div id="barPi" style="background:var(--solute)"></div></div><em id="tPi"></em>
           <span>수압 + P</span><div class="track"><div id="barH" style="background:var(--water)"></div><div id="barP" style="background:var(--piston)"></div></div><em id="tHP"></em>
         </div>
         <p class="note" id="vMsg">두 막대 길이가 비슷해지면(수압 + P = π) 양쪽으로 넘어가는 물의 양이 같아집니다.</p>
@@ -237,6 +239,7 @@ function fRn(){return fOf(nR+(pmode?SOL_VOL*solute.length:0))}
 function dhReal(){return (fRn()-fLn())*FULL_M}
 function nSolTarget(){return Math.round(KIND[kind].i*C*SOL_PER_M)}
 function piNow(){return KIND[kind].i*C*R*(T+273)}
+function concNow(){return KIND[kind].i*C*N0/(nR+SOL_VOL*solute.length)}   // 입자 모드: 묽어진 뒤의 입자 농도
 function avgDh(){ if(!samples.length) return null; var a=0,i; for(i=0;i<samples.length;i++) a+=samples[i][1]; return a/samples.length; }
 function rnd(a,b){return a+Math.random()*(b-a)}
 
@@ -265,8 +268,8 @@ function step(dt){
   var vs=V0*Math.sqrt((T+273)/298);
   var b, pLR, pRL, mn=pmode?NMIN_P:NMIN;
   if(pmode){
-    // 입자 모드: π = iCRT를 쓰지 않는다. 압력이 낮은 쪽으로는 항상, 높은 쪽으로는 exp(-|ΔP|/P0) 확률로 통과
-    var dP=P+dhReal()/ATM_M, q=Math.exp(-Math.abs(dP)/(0.123*(T+273)));
+    // 입자 모드: π = iCRT를 쓰지 않는다. 압력이 낮은 쪽으로는 항상, 높은 쪽으로는 1 - |ΔP|/P0 확률로 통과 (0보다 작으면 0)
+    var dP=P+dhReal()/ATM_M, q=Math.max(0,1-Math.abs(dP)/(0.123*(T+273)));
     pLR=dP>0?q:1; pRL=dP<0?q:1; b=-dP;
   } else {
     var drive=piNow()-P-dhReal()/ATM_M;          // 물을 용액 쪽으로 끌어들이는 알짜 효과 (atm)
@@ -486,14 +489,18 @@ function ui(){
   else if(net<-thr){ ct=P>pi?"역삼투 진행 중":"물이 되돌아가는 중"; cls+=" rev"; }
   else { ct="측정 중"; }
   chip.className=cls; chip.textContent=ct;
-  var mx=Math.max(pi,Math.max(0,hyd)+P,10);
-  $("barPi").style.width=(pi/mx*100)+"%";
+  var cn=concNow(), pb=pmode?cn*R*(T+273):pi;      // 입자 모드의 막대는 현재 농도 기준 삼투압
+  ["kCur","vCur","kPiCur","vPiCur"].forEach(function(id){$(id).hidden=!pmode});
+  $("vCur").textContent=cn.toFixed(2)+" mol/L"; $("vPiCur").textContent=pb.toFixed(1)+" atm";
+  $("lPi").textContent=pmode?"π (현재 농도)":"π";
+  var mx=Math.max(pb,Math.max(0,hyd)+P,10);
+  $("barPi").style.width=(pb/mx*100)+"%";
   $("barH").style.width=(Math.max(0,hyd)/mx*100)+"%";
   $("barP").style.width=(P/mx*100)+"%";
-  $("tPi").textContent=pi.toFixed(1)+" atm"; $("tHP").textContent=(hyd+P).toFixed(1)+" atm";
+  $("tPi").textContent=pb.toFixed(1)+" atm"; $("tHP").textContent=(hyd+P).toFixed(1)+" atm";
   var msg;
   if(limitHit) msg="화면 속 용기가 꽉 차서 물이 더 넘어가지 못합니다. 실제라면 평형이 될 때까지 계속 이동합니다.";
-  else if(pmode) msg="입자 모드에서는 통과 확률에 π = iCRT를 쓰지 않습니다. 수압 + P가 π 근처에서 멈추는지 60초 평균 수위 차로 비교해 보세요.";
+  else if(pmode) msg="입자 모드에서는 통과 확률에 π = iCRT를 쓰지 않습니다. 물이 넘어오면 용액이 묽어지므로, 수압 + P가 현재 농도 기준 삼투압 근처에서 멈추는지 비교해 보세요.";
   else if(P>pi && netTxt.indexOf("평형")>=0 && simT>3) msg="P가 π보다 커서 물이 순수한 물 쪽으로 넘어갔습니다(역삼투). 지금은 왼쪽 수위가 높아져서 다시 균형이 맞았습니다.";
   else if(P>pi) msg="P가 π보다 커서 물이 용액에서 순수한 물 쪽으로 밀려 나가고 있습니다(역삼투).";
   else msg="두 막대 길이가 비슷해지면(수압 + P = π) 양쪽으로 넘어가는 물의 양이 같아집니다.";
