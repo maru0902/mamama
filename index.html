@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>삼투압 시뮬레이션</title>
+<style>
+/* 배치: 왼쪽에 실험 용기와 슬라이더, 오른쪽에 측정값·그래프·실생활 예. 좁은 화면에서는 한 줄로 쌓인다. */
+:root{
+  --bg:#eef2f7; --card:#ffffff; --ink:#14202e; --muted:#5a6b7d; --line:#d3dbe6;
+  --tank:#f6f9fc; --wall:#3b4a5c; --water:#1f6fd6; --water-fill:rgba(64,140,230,.16);
+  --sol-fill:rgba(64,140,230,.22); --solute:#ef7d16; --solute-edge:#b85600;
+  --membrane:#6b5b95; --piston:#566579; --accent:#0d7c86; --accent-ink:#ffffff;
+  --good:#1c8a4c; --warn:#c2410c; --soft:#e6edf5;
+  --font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c131c; --card:#151f2b; --ink:#e8eef5; --muted:#93a4b6; --line:#2a3848;
+    --tank:#0f1924; --wall:#a9b8c8; --water:#5aa8ff; --water-fill:rgba(70,150,255,.16);
+    --sol-fill:rgba(70,150,255,.24); --solute:#ff9a3d; --solute-edge:#ffd0a0;
+    --membrane:#b3a3e6; --piston:#8b9bb0; --accent:#35b8c2; --accent-ink:#06222a;
+    --good:#4fd08a; --warn:#ff9466; --soft:#1e2b3a; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0c131c; --card:#151f2b; --ink:#e8eef5; --muted:#93a4b6; --line:#2a3848;
+  --tank:#0f1924; --wall:#a9b8c8; --water:#5aa8ff; --water-fill:rgba(70,150,255,.16);
+  --sol-fill:rgba(70,150,255,.24); --solute:#ff9a3d; --solute-edge:#ffd0a0;
+  --membrane:#b3a3e6; --piston:#8b9bb0; --accent:#35b8c2; --accent-ink:#06222a;
+  --good:#4fd08a; --warn:#ff9466; --soft:#1e2b3a; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5;
+  padding-block:18px 32px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+  -webkit-text-size-adjust:100%}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header h1{margin:0;font-size:1.55rem;letter-spacing:-.02em;text-wrap:balance}
+header p{margin:2px 0 0;color:var(--muted);font-size:.95rem}
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+@media (min-width:900px){.grid{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);align-items:start}}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}
+.card h2{margin:0 0 10px;font-size:1rem;letter-spacing:-.01em}
+#sim{display:block;width:100%;max-width:100%;aspect-ratio:960/600;border-radius:10px;background:var(--tank);touch-action:pan-y}
+.note{margin:8px 0 0;font-size:.82rem;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px;font-size:.85rem;color:var(--muted)}
+.legend i{display:inline-block;border-radius:50%;vertical-align:middle;margin-right:6px}
+.dot-w{width:8px;height:8px;background:var(--water)}
+.dot-s{width:15px;height:15px;background:var(--solute)}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+button{font:inherit;font-weight:600;min-height:46px;padding:0 18px;border-radius:10px;border:1px solid var(--line);
+  background:var(--soft);color:var(--ink);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button:active{transform:translateY(1px)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+.chip{margin-left:auto;align-self:center;font-size:.88rem;font-weight:700;padding:6px 12px;border-radius:999px;background:var(--soft);color:var(--muted)}
+.chip.go{color:var(--water)} .chip.eq{color:var(--good)} .chip.rev{color:var(--warn)}
+.slider{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:baseline;padding:6px 0}
+.slider label{font-weight:600}
+.slider output{font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent)}
+.slider small{grid-column:1/-1;color:var(--muted);font-size:.8rem}
+input[type=range]{grid-column:1/-1;width:100%;height:40px;margin:0;background:transparent;-webkit-appearance:none;appearance:none;touch-action:pan-y}
+input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:4px;background:var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;margin-top:-11px;border-radius:50%;background:var(--accent);border:3px solid var(--card);box-shadow:0 1px 4px rgba(0,0,0,.35)}
+input[type=range]::-moz-range-track{height:8px;border-radius:4px;background:var(--line)}
+input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:var(--accent);border:3px solid var(--card)}
+.pi{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.pi b{font-size:2rem;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:var(--solute)}
+.pi span{color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}
+dl{margin:10px 0 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 12px}
+dt{color:var(--muted);font-size:.9rem}
+dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+.bal{margin-top:12px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 8px;align-items:center;font-size:.82rem}
+.bal .track{height:14px;border-radius:7px;background:var(--soft);overflow:hidden;display:flex}
+.bal .track div{height:100%;transition:width .2s}
+.bal em{font-style:normal;font-variant-numeric:tabular-nums;font-weight:700}
+#graph{display:block;width:100%;height:190px}
+.life p{margin:10px 0 0;font-size:.92rem}
+.life .hint{color:var(--muted)}
+ul.simple{margin:8px 0 0;padding-left:1.2em;font-size:.88rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>삼투압 시뮬레이션</h1>
+    <p>반투막을 사이에 둔 순수한 물과 용액. 농도·온도·압력을 바꾸며 물의 이동과 반트호프 법칙 π = CRT를 확인합니다.</p>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <section class="card">
+        <canvas id="sim" aria-label="반투막으로 나뉜 용기 속 입자 운동"></canvas>
+        <div class="legend">
+          <span><i class="dot-w"></i>물 분자 (막의 구멍 통과)</span>
+          <span><i class="dot-s"></i>용질 입자 (막에서 튕김)</span>
+        </div>
+        <p class="note">※ 축소 표시: 실제 수위 차는 수백 m에 이릅니다. 화면에서는 용기 높이 전체가 600 m가 되도록 줄여서 그렸고, 입자와 막의 구멍은 보이도록 크게 그렸습니다.</p>
+        <div class="btns">
+          <button id="bStart" class="primary" type="button">시작</button>
+          <button id="bPause" type="button" disabled>일시정지</button>
+          <button id="bReset" type="button">초기화</button>
+          <button id="bSpeed" type="button" aria-label="재생 속도">배속 ×1</button>
+          <span id="chip" class="chip">대기 중</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>조절 변인</h2>
+        <div class="slider">
+          <label for="sC">용질 입자 농도 C</label><output id="oC" for="sC"></output>
+          <input id="sC" type="range" min="0" max="1.2" step="0.05" value="0.5">
+        </div>
+        <div class="slider">
+          <label for="sT">온도 T</label><output id="oT" for="sT"></output>
+          <input id="sT" type="range" min="0" max="100" step="1" value="25">
+        </div>
+        <div class="slider">
+          <label for="sP">용액 쪽에 가하는 압력 P</label><output id="oP" for="sP"></output>
+          <input id="sP" type="range" min="0" max="60" step="1" value="0">
+        </div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="card">
+        <h2>측정 패널</h2>
+        <div class="pi">
+          <b id="vPi">–</b>
+          <span>이론 삼투압 π = CRT<br><span id="vFormula"></span></span>
+        </div>
+        <dl>
+          <dt>최근 10초 통과 수 (왼 → 오)</dt><dd id="vLR">0개</dd>
+          <dt>최근 10초 통과 수 (오 → 왼)</dt><dd id="vRL">0개</dd>
+          <dt>알짜 이동 방향</dt><dd id="vNet">–</dd>
+          <dt>현재 수위 차 (용액 − 물)</dt><dd id="vDh">0 m</dd>
+          <dt>수위 차로 생긴 수압</dt><dd id="vHyd">0.0 atm</dd>
+        </dl>
+        <div class="bal" aria-label="삼투압과 수압 더하기 압력 비교">
+          <span>π</span><div class="track"><div id="barPi" style="background:var(--solute)"></div></div><em id="tPi"></em>
+          <span>수압 + P</span><div class="track"><div id="barH" style="background:var(--water)"></div><div id="barP" style="background:var(--piston)"></div></div><em id="tHP"></em>
+        </div>
+        <p class="note" id="vMsg">두 막대의 길이가 같아지면 물의 알짜 이동이 멈춥니다.</p>
+      </section>
+
+      <section class="card">
+        <h2>시간에 따른 수위 차</h2>
+        <canvas id="graph" aria-label="시간에 따른 수위 차 그래프"></canvas>
+      </section>
+
+      <section class="card life">
+        <h2>실생활 속 삼투</h2>
+        <div class="btns" style="margin-top:0">
+          <button id="bCabbage" type="button">배추 절이기</button>
+          <button id="bDesal" type="button">해수 담수화</button>
+        </div>
+        <div id="lifeBox"><p class="hint">버튼을 누르면 조건이 자동으로 맞춰지고 실험이 시작됩니다.</p></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+/* ---------- 상수 ---------- */
+var R=0.082, WW=960, WH=600;
+var TK={l:70,r:850,t:70,b:530}, TH=TK.b-TK.t;
+var MX=460, MH=5, PORE=30;            // 반투막 위치, 반두께, 구멍 간격
+var N0=300, NMIN=90;                  // 한쪽 물 분자 수(처음), 최소 수
+var FULL_M=600, ATM_M=10.33;          // 용기 높이 = 600 m, 1 atm = 물기둥 10.33 m
+var V0=110, WR=2.6, SR=7, SOL_PER_M=40;
+
+var $=function(id){return document.getElementById(id)};
+var cv=$("sim"), ctx=cv.getContext("2d"), gv=$("graph"), gx=gv.getContext("2d");
+var sC=$("sC"), sT=$("sT"), sP=$("sP");
+
+/* ---------- 상태 ---------- */
+var C=0.5, T=25, P=0, running=false, speedMul=1, simT=0;
+var water=[], solute=[], nL=N0, nR=N0, dispL=0.5, dispR=0.5;
+var crossLR=[], crossRL=[], samples=[], fx=[], limitHit=false, lastSample=-1;
+
+function fOf(n){return 0.5*n/N0}
+function surfY(f){return TK.b-f*TH}
+function dhReal(){return (fOf(nR)-fOf(nL))*FULL_M}
+function piNow(){return C*R*(T+273)}
+function rnd(a,b){return a+Math.random()*(b-a)}
+
+function newParticle(side,rad,top){
+  var a=Math.random()*Math.PI*2;
+  var x0=side?MX+MH+rad:TK.l+rad, x1=side?TK.r-rad:MX-MH-rad;
+  return {x:rnd(x0,x1), y:rnd(top+rad,TK.b-rad), ux:Math.cos(a), uy:Math.sin(a), s:rnd(0.6,1.4), side:side};
+}
+function resetWater(){
+  water=[]; nL=N0; nR=N0; dispL=dispR=0.5;
+  var top=surfY(0.5), i;
+  for(i=0;i<N0;i++) water.push(newParticle(0,WR,top));
+  for(i=0;i<N0;i++) water.push(newParticle(1,WR,top));
+  solute=[]; syncSolute();
+  crossLR=[]; crossRL=[]; samples=[]; fx=[]; simT=0; lastSample=-1; limitHit=false;
+}
+function syncSolute(){
+  var target=Math.round(C*SOL_PER_M);
+  while(solute.length<target) solute.push(newParticle(1,SR,surfY(dispR)));
+  solute.length=target;
+}
+
+/* ---------- 한 걸음 계산 ---------- */
+function step(dt){
+  simT+=dt;
+  var vs=V0*Math.sqrt((T+273)/298);
+  var drive=piNow()-P-dhReal()/ATM_M;            // 물을 용액 쪽으로 끌어들이는 알짜 효과 (atm)
+  var b=0.9*Math.tanh(drive/6);
+  var pLR=0.5*(1+b), pRL=0.5*(1-b);
+  limitHit=false;
+  if(nL<=NMIN){ if(b>0) limitHit=true; pLR=0; }
+  if(nR<=NMIN){ if(b<0) limitHit=true; pRL=0; }
+  dispL+=(fOf(nL)-dispL)*Math.min(1,dt*6);
+  dispR+=(fOf(nR)-dispR)*Math.min(1,dt*6);
+  var sL=surfY(dispL), sR=surfY(dispR), common=Math.max(sL,sR)+3;
+  var i,p,v,top,xa,xb;
+  for(i=0;i<water.length;i++){
+    p=water[i]; v=vs*p.s;
+    p.x+=p.ux*v*dt; p.y+=p.uy*v*dt;
+    top=(p.side?sR:sL)+WR;
+    if(p.y<top){p.y=top; p.uy=Math.abs(p.uy);}
+    if(p.y>TK.b-WR){p.y=TK.b-WR; p.uy=-Math.abs(p.uy);}
+    if(p.side===0){
+      xa=TK.l+WR; xb=MX-MH-WR;
+      if(p.x<xa){p.x=xa; p.ux=Math.abs(p.ux);}
+      else if(p.x>xb){
+        if(inPore(p.y,common) && Math.random()<pLR){
+          p.side=1; p.x=MX+MH+WR+1; nL--; nR++; crossLR.push(simT); fx.push({y:p.y,t:simT,d:1});
+        } else {p.x=xb; p.ux=-Math.abs(p.ux);}
+      }
+    } else {
+      xa=MX+MH+WR; xb=TK.r-WR;
+      if(p.x>xb){p.x=xb; p.ux=-Math.abs(p.ux);}
+      else if(p.x<xa){
+        if(inPore(p.y,common) && Math.random()<pRL){
+          p.side=0; p.x=MX-MH-WR-1; nR--; nL++; crossRL.push(simT); fx.push({y:p.y,t:simT,d:-1});
+        } else {p.x=xa; p.ux=Math.abs(p.ux);}
+      }
+    }
+  }
+  for(i=0;i<solute.length;i++){
+    p=solute[i]; v=vs*p.s*0.45;
+    p.x+=p.ux*v*dt; p.y+=p.uy*v*dt;
+    if(p.y<sR+SR){p.y=sR+SR; p.uy=Math.abs(p.uy);}
+    if(p.y>TK.b-SR){p.y=TK.b-SR; p.uy=-Math.abs(p.uy);}
+    if(p.x<MX+MH+SR){p.x=MX+MH+SR; p.ux=Math.abs(p.ux);}      // 용질은 막에서 항상 튕긴다
+    if(p.x>TK.r-SR){p.x=TK.r-SR; p.ux=-Math.abs(p.ux);}
+  }
+  while(crossLR.length&&crossLR[0]<simT-10) crossLR.shift();
+  while(crossRL.length&&crossRL[0]<simT-10) crossRL.shift();
+  while(fx.length&&fx[0].t<simT-0.4) fx.shift();
+  if(simT-lastSample>=0.2){ lastSample=simT; samples.push([simT,dhReal()]);
+    while(samples.length&&samples[0][0]<simT-60) samples.shift(); }
+}
+function inPore(y,common){ return y>common && ((y-TK.t)%PORE)>=PORE/2; }
+
+/* ---------- 색 (테마 토큰에서 읽기) ---------- */
+var K={};
+function readColors(){
+  var cs=getComputedStyle(document.documentElement);
+  ["tank","wall","water","water-fill","sol-fill","solute","solute-edge","membrane","piston","ink","muted","line","card","accent","warn"]
+    .forEach(function(n){K[n]=cs.getPropertyValue("--"+n).trim()});
+  K.font=cs.getPropertyValue("--font");
+}
+
+/* ---------- 용기 그리기 ---------- */
+function fitCanvas(c,g){
+  var dpr=Math.min(window.devicePixelRatio||1,2.5), w=Math.round(c.clientWidth*dpr), h=Math.round(c.clientHeight*dpr);
+  if(w>0&&h>0&&(c.width!==w||c.height!==h)){c.width=w;c.height=h;}
+  return dpr;
+}
+function draw(){
+  fitCanvas(cv);
+  var k=cv.width/WW; ctx.setTransform(k,0,0,k,0,0); ctx.clearRect(0,0,WW,WH);
+  var sL=surfY(dispL), sR=surfY(dispR), i,p,y;
+  ctx.fillStyle=K["water-fill"]; ctx.fillRect(TK.l,sL,MX-MH-TK.l,TK.b-sL);
+  ctx.fillStyle=K["sol-fill"];   ctx.fillRect(MX+MH,sR,TK.r-MX-MH,TK.b-sR);
+  ctx.strokeStyle=K.water; ctx.lineWidth=2; ctx.beginPath();
+  ctx.moveTo(TK.l,sL); ctx.lineTo(MX-MH,sL); ctx.moveTo(MX+MH,sR); ctx.lineTo(TK.r,sR); ctx.stroke();
+
+  ctx.fillStyle=K.water; ctx.beginPath();
+  for(i=0;i<water.length;i++){p=water[i]; ctx.moveTo(p.x+WR,p.y); ctx.arc(p.x,p.y,WR,0,6.2832);}
+  ctx.fill();
+  ctx.fillStyle=K.solute; ctx.strokeStyle=K["solute-edge"]; ctx.lineWidth=1.5;
+  for(i=0;i<solute.length;i++){p=solute[i]; ctx.beginPath(); ctx.arc(p.x,p.y,SR,0,6.2832); ctx.fill(); ctx.stroke();}
+
+  // 통과 순간 표시
+  ctx.strokeStyle=K.water; ctx.lineWidth=2;
+  for(i=0;i<fx.length;i++){var a=(simT-fx[i].t)/0.4; if(a<0||a>1)continue;
+    ctx.globalAlpha=1-a; ctx.beginPath(); ctx.arc(MX+fx[i].d*(4+a*14),fx[i].y,3+a*9,0,6.2832); ctx.stroke();}
+  ctx.globalAlpha=1;
+
+  // 반투막
+  ctx.fillStyle=K.membrane;
+  for(y=TK.t;y<TK.b;y+=PORE) ctx.fillRect(MX-MH,y,MH*2,Math.min(PORE/2,TK.b-y));
+  // 용기 벽
+  ctx.strokeStyle=K.wall; ctx.lineWidth=4; ctx.lineJoin="round"; ctx.beginPath();
+  ctx.moveTo(TK.l-2,TK.t-14); ctx.lineTo(TK.l-2,TK.b+2); ctx.lineTo(TK.r+2,TK.b+2); ctx.lineTo(TK.r+2,TK.t-14); ctx.stroke();
+
+  // 피스톤
+  var pc=(MX+MH+TK.r)/2, py=sR-12;
+  ctx.globalAlpha=P>0?1:0.35; ctx.fillStyle=K.piston;
+  ctx.fillRect(MX+MH+1,py,TK.r-MX-MH-1,12); ctx.fillRect(pc-7,py-26,14,26); ctx.fillRect(pc-34,py-34,68,9);
+  ctx.globalAlpha=1;
+  ctx.fillStyle=K.ink; ctx.font="700 17px "+K.font; ctx.textAlign="center"; ctx.textBaseline="alphabetic";
+  ctx.fillText("P = "+P+" atm",pc,py-44);
+  if(P>0){ var len=10+P/60*22; ctx.strokeStyle=K.warn; ctx.fillStyle=K.warn; ctx.lineWidth=3;
+    [-120,120].forEach(function(dx){ var x=pc+dx, yb=py-4;
+      ctx.beginPath(); ctx.moveTo(x,yb-len-8); ctx.lineTo(x,yb-7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x-7,yb-8); ctx.lineTo(x+7,yb-8); ctx.lineTo(x,yb); ctx.fill(); }); }
+
+  // 눈금자 (100 m 간격)
+  ctx.strokeStyle=K.muted; ctx.fillStyle=K.muted; ctx.lineWidth=1; ctx.font="12px "+K.font; ctx.textAlign="right"; ctx.textBaseline="middle";
+  for(i=0;i<=600;i+=100){ y=TK.b-i/FULL_M*TH; ctx.beginPath(); ctx.moveTo(TK.l-12,y); ctx.lineTo(TK.l-4,y); ctx.stroke(); ctx.fillText(i+(i===600?" m":""),TK.l-16,y); }
+
+  // 이름표
+  ctx.fillStyle=K.ink; ctx.font="600 17px "+K.font; ctx.textAlign="center"; ctx.textBaseline="alphabetic";
+  ctx.fillText("순수한 물",(TK.l+MX)/2,TK.b+30); ctx.fillText("용액 (물 + 용질)",pc,TK.b+30);
+  ctx.fillStyle=K.membrane; ctx.font="600 15px "+K.font; ctx.fillText("반투막",MX,TK.t-22);
+
+  // 수위 차 표시
+  var bx=TK.r+16, dh=dhReal();
+  ctx.strokeStyle=K.muted; ctx.lineWidth=1.5; ctx.setLineDash([5,5]); ctx.beginPath(); ctx.moveTo(MX+MH,sL); ctx.lineTo(bx+6,sL); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle=K.ink; ctx.lineWidth=2; ctx.beginPath();
+  ctx.moveTo(bx,sL); ctx.lineTo(bx,sR); ctx.moveTo(bx-6,sL); ctx.lineTo(bx+6,sL); ctx.moveTo(bx-6,sR); ctx.lineTo(bx+6,sR); ctx.stroke();
+  var my=Math.max(TK.t+10,Math.min(TK.b-24,(sL+sR)/2));
+  ctx.fillStyle=K.muted; ctx.font="13px "+K.font; ctx.textAlign="left"; ctx.fillText("수위 차",bx+12,my-4);
+  ctx.fillStyle=K.ink; ctx.font="700 16px "+K.font; ctx.fillText(fmtM(dh),bx+12,my+16);
+}
+function fmtM(v){var r=Math.round(v); return (r>0?"+":"")+r+" m"}
+
+/* ---------- 그래프 ---------- */
+function niceStep(x){var e=Math.pow(10,Math.floor(Math.log(x)/Math.LN10)),f=x/e; return (f<1.5?1:f<3.5?2:f<7.5?5:10)*e}
+function drawGraph(){
+  var dpr=fitCanvas(gv), w=gv.clientWidth, h=gv.clientHeight; if(!w||!h)return;
+  gx.setTransform(dpr,0,0,dpr,0,0); gx.clearRect(0,0,w,h);
+  var L=48,Rr=12,Tt=12,B=26, pw=w-L-Rr, ph=h-Tt-B;
+  var t1=Math.max(60,simT), t0=t1-60;
+  var eq=Math.max(-420,Math.min(420,(piNow()-P)*ATM_M));
+  var lo=Math.min(0,eq), hi=Math.max(0,eq), i;
+  for(i=0;i<samples.length;i++){ if(samples[i][1]<lo)lo=samples[i][1]; if(samples[i][1]>hi)hi=samples[i][1]; }
+  if(hi-lo<40){hi+=20;lo-=20} var pad=(hi-lo)*0.12; hi+=pad; lo-=pad;
+  var X=function(t){return L+(t-t0)/60*pw}, Y=function(v){return Tt+(hi-v)/(hi-lo)*ph};
+  var st=niceStep((hi-lo)/4), v;
+  gx.font="12px "+K.font; gx.textBaseline="middle"; gx.textAlign="right"; gx.lineWidth=1;
+  for(v=Math.ceil(lo/st)*st; v<=hi; v+=st){
+    gx.strokeStyle=K.line; gx.globalAlpha=Math.abs(v)<1e-9?1:0.6; gx.beginPath(); gx.moveTo(L,Y(v)); gx.lineTo(w-Rr,Y(v)); gx.stroke();
+    gx.globalAlpha=1; gx.fillStyle=K.muted; gx.fillText(Math.round(v),L-6,Y(v)); }
+  gx.strokeStyle=K.muted; gx.beginPath(); gx.moveTo(L,Y(0)); gx.lineTo(w-Rr,Y(0)); gx.stroke();
+  gx.textAlign="center"; gx.textBaseline="alphabetic";
+  for(v=Math.ceil(t0/10)*10; v<=t1; v+=10) gx.fillText(v+(v===Math.floor(t1/10)*10?" 초":""),X(v),h-7);
+  gx.save(); gx.translate(11,Tt+ph/2); gx.rotate(-Math.PI/2); gx.fillText("수위 차 (m)",0,0); gx.restore();
+  // 평형 예상값
+  gx.strokeStyle=K.solute; gx.setLineDash([6,5]); gx.lineWidth=1.5; gx.beginPath(); gx.moveTo(L,Y(eq)); gx.lineTo(w-Rr,Y(eq)); gx.stroke(); gx.setLineDash([]);
+  gx.fillStyle=K.solute; gx.textAlign="right"; gx.fillText("평형 예상 "+Math.round(eq)+" m",w-Rr-2,Y(eq)+(Y(eq)<Tt+18?15:-5));
+  // 측정값
+  if(samples.length>1){ gx.strokeStyle=K.water; gx.lineWidth=2.5; gx.lineJoin="round"; gx.beginPath();
+    for(i=0;i<samples.length;i++){ var x=X(samples[i][0]), y=Y(samples[i][1]); if(i)gx.lineTo(x,y); else gx.moveTo(x,y); }
+    gx.stroke();
+    var s=samples[samples.length-1]; gx.fillStyle=K.water; gx.beginPath(); gx.arc(X(s[0]),Y(s[1]),4,0,6.2832); gx.fill(); }
+}
+
+/* ---------- 숫자 패널 ---------- */
+function ui(){
+  var pi=piNow(), dh=dhReal(), hyd=dh/ATM_M, lr=crossLR.length, rl=crossRL.length, net=lr-rl;
+  $("oC").textContent=C.toFixed(2)+" mol/L";
+  $("oT").textContent=T+" ℃ ("+(T+273)+" K)";
+  $("oP").textContent=P+" atm";
+  $("vPi").textContent=pi.toFixed(1)+" atm";
+  $("vFormula").textContent=C.toFixed(2)+" × 0.082 × "+(T+273)+" = "+pi.toFixed(1)+" atm";
+  $("vLR").textContent=lr+"개"; $("vRL").textContent=rl+"개";
+  $("vDh").textContent=fmtM(dh); $("vHyd").textContent=hyd.toFixed(1)+" atm";
+  var thr=1.5*Math.sqrt(lr+rl)+2, netTxt, chip=$("chip"), cls="chip", ct;
+  if(lr+rl<8 && simT<3){ netTxt="측정 중"; }
+  else if(Math.abs(net)<=thr){ netTxt="거의 0 (동적 평형)"; }
+  else if(net>0){ netTxt="물 → 용액 (삼투)"; }
+  else { netTxt="용액 → 물"+(P>pi?" (역삼투)":""); }
+  $("vNet").textContent=netTxt;
+  if(!running){ ct=simT>0?"일시정지":"대기 중"; }
+  else if(limitHit){ ct="용기 한계 도달"; cls+=" rev"; }
+  else if(netTxt.indexOf("평형")>=0){ ct="동적 평형"; cls+=" eq"; }
+  else if(net>thr){ ct="삼투 진행 중"; cls+=" go"; }
+  else if(net<-thr){ ct=P>pi?"역삼투 진행 중":"물이 되돌아가는 중"; cls+=" rev"; }
+  else { ct="측정 중"; }
+  chip.className=cls; chip.textContent=ct;
+  var mx=Math.max(pi,Math.max(0,hyd)+P,10);
+  $("barPi").style.width=(pi/mx*100)+"%";
+  $("barH").style.width=(Math.max(0,hyd)/mx*100)+"%";
+  $("barP").style.width=(P/mx*100)+"%";
+  $("tPi").textContent=pi.toFixed(1)+" atm"; $("tHP").textContent=(hyd+P).toFixed(1)+" atm";
+  var msg;
+  if(limitHit) msg="화면 용기의 한계에 닿아 물이 더 이동하지 못합니다. 실제로는 평형이 될 때까지 계속 이동합니다.";
+  else if(P>pi && netTxt.indexOf("평형")>=0 && simT>3) msg="P가 π보다 커서 물이 순수한 물 쪽으로 넘어갔고(역삼투), 지금은 반대쪽 수위가 높아져 균형을 이뤘습니다.";
+  else if(P>pi) msg="P가 π보다 큽니다. 물이 용액에서 순수한 물 쪽으로 밀려 나갑니다 (역삼투).";
+  else msg="두 막대의 길이가 같아지면 (수압 + P = π) 물의 알짜 이동이 멈춥니다.";
+  $("vMsg").textContent=msg;
+  $("bStart").disabled=running; $("bPause").disabled=!running;
+  $("bStart").className=running?"":"primary";
+}
+
+/* ---------- 조작 ---------- */
+function readSliders(){ C=parseFloat(sC.value); T=parseFloat(sT.value); P=parseFloat(sP.value); syncSolute(); ui(); }
+[sC,sT,sP].forEach(function(s){ s.addEventListener("input",readSliders); s.addEventListener("change",readSliders); });
+function setRun(v){ running=v; ui(); }
+$("bStart").addEventListener("click",function(){setRun(true)});
+$("bPause").addEventListener("click",function(){setRun(false)});
+$("bReset").addEventListener("click",function(){
+  sC.value=0.5; sT.value=25; sP.value=0; running=false; C=0.5;T=25;P=0; resetWater();
+  $("lifeBox").innerHTML='<p class="hint">버튼을 누르면 조건이 자동으로 맞춰지고 실험이 시작됩니다.</p>'; ui();
+});
+$("bSpeed").addEventListener("click",function(){ speedMul=speedMul===1?2:speedMul===2?4:1; this.textContent="배속 ×"+speedMul; });
+function preset(c,t,p,html){
+  sC.value=c; sT.value=t; sP.value=p; C=c;T=t;P=p; resetWater(); $("lifeBox").innerHTML=html; setRun(true);
+}
+$("bCabbage").addEventListener("click",function(){
+  preset(1.2,20,0,
+    '<p><b>배추 절이기</b> · 왼쪽은 배추 세포 속(묽음), 오른쪽은 진한 소금물이라고 생각하세요.</p>'+
+    '<p>소금물의 농도가 세포 속보다 훨씬 높아서, 물이 세포막(반투막)을 지나 소금물 쪽으로 빠져나갑니다. '+
+    '소금 입자는 막을 잘 통과하지 못하므로 물만 이동하고, 물을 잃은 배추는 숨이 죽어 부피가 줄어듭니다.</p>');
+});
+$("bDesal").addEventListener("click",function(){
+  var pi=(1.1*R*298).toFixed(1);
+  preset(1.1,25,0,
+    '<p><b>해수 담수화</b> · 오른쪽이 바닷물(C = 1.1 mol/L, 25 ℃), 왼쪽이 얻고 싶은 담수입니다. 이때 삼투압은 π ≈ '+pi+' atm입니다.</p>'+
+    '<p>그대로 두면 담수가 바닷물 쪽으로 넘어갑니다. 압력 P를 π보다 크게 올리면 물이 반대로 바닷물에서 담수 쪽으로 밀려 나오고, 용질은 막에 걸러집니다. 이것이 역삼투입니다.</p>'+
+    '<div class="btns"><button id="bRO" type="button" class="primary">P를 40 atm으로 올려 역삼투 보기</button></div>');
+  $("bRO").addEventListener("click",function(){ sP.value=40; readSliders(); });
+});
+
+/* ---------- 반복 ---------- */
+var last=0, lastUi=0;
+function frame(ts){
+  var dt=Math.min(0.05,(ts-last)/1000||0); last=ts;
+  if(running){ for(var i=0;i<speedMul;i++) step(dt); }
+  draw();
+  if(ts-lastUi>200){ lastUi=ts; ui(); drawGraph(); }
+  requestAnimationFrame(frame);
+}
+readColors();
+try{ var mq=window.matchMedia("(prefers-color-scheme: dark)"); (mq.addEventListener?mq.addEventListener("change",readColors):mq.addListener(readColors)); }catch(e){}
+try{ new MutationObserver(readColors).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]}); }catch(e){}
+resetWater(); readSliders(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
