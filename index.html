@@ -80,6 +80,12 @@ dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
 #graph{display:block;width:100%;height:190px}
 .life p{margin:10px 0 0;font-size:.92rem}
 .life .hint{color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:4px 0}
+.row .rl{font-weight:600;min-width:5.2em}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{min-height:42px;padding:0 14px;font-size:.92rem}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+#modeNote{margin:2px 0 8px}
 .dot-t{width:13px;height:13px;border:3px solid var(--trace);background:var(--card)}
 .tbl{overflow-x:auto;margin-top:10px}
 table{border-collapse:collapse;width:100%;font-size:.85rem;font-variant-numeric:tabular-nums}
@@ -120,9 +126,24 @@ ul.simple{margin:8px 0 0;padding-left:1.2em;font-size:.88rem;color:var(--muted)}
 
       <section class="card">
         <h2>조절 변인</h2>
+        <div class="row"><span class="rl">계산 방식</span>
+          <div class="seg" id="segMode">
+            <button type="button" data-m="0" aria-pressed="true">식 모드</button>
+            <button type="button" data-m="1" aria-pressed="false">입자 모드</button>
+          </div>
+        </div>
+        <p class="sub" id="modeNote"></p>
+        <div class="row"><span class="rl">용질 종류</span>
+          <div class="seg" id="segKind">
+            <button type="button" data-k="0" aria-pressed="true">포도당 (i = 1)</button>
+            <button type="button" data-k="1" aria-pressed="false">염화 나트륨 (i = 2)</button>
+            <button type="button" data-k="2" aria-pressed="false">염화 칼슘 (i = 3)</button>
+          </div>
+        </div>
         <div class="slider">
-          <label for="sC">용질 입자 농도 C</label><output id="oC" for="sC"></output>
+          <label for="sC">용질 농도 C</label><output id="oC" for="sC"></output>
           <input id="sC" type="range" min="0" max="1.2" step="0.05" value="0.5">
+          <small id="oIC"></small>
         </div>
         <div class="slider">
           <label for="sT">온도 T</label><output id="oT" for="sT"></output>
@@ -143,7 +164,7 @@ ul.simple{margin:8px 0 0;padding-left:1.2em;font-size:.88rem;color:var(--muted)}
         </div>
         <div class="tbl" id="recWrap" hidden>
           <table>
-            <thead><tr><th>#</th><th>C (mol/L)</th><th>T (℃)</th><th>P (atm)</th><th>이론 π</th><th>수위 차</th><th>측정 π</th><th>오차</th><th>상태</th></tr></thead>
+            <thead><tr><th>#</th><th>모드</th><th>용질</th><th>C (mol/L)</th><th>T (℃)</th><th>P (atm)</th><th>이론 π</th><th>수위 차</th><th>측정 π</th><th>오차</th><th>상태</th></tr></thead>
             <tbody id="recBody"></tbody>
           </table>
         </div>
@@ -163,13 +184,14 @@ ul.simple{margin:8px 0 0;padding-left:1.2em;font-size:.88rem;color:var(--muted)}
         <h2>측정 패널</h2>
         <div class="pi">
           <b id="vPi">–</b>
-          <span>이론 삼투압 π = CRT<br><span id="vFormula"></span></span>
+          <span>이론 삼투압 π = iCRT<br><span id="vFormula"></span></span>
         </div>
         <dl>
           <dt>최근 10초 통과 수 (왼 → 오)</dt><dd id="vLR">0개</dd>
           <dt>최근 10초 통과 수 (오 → 왼)</dt><dd id="vRL">0개</dd>
           <dt>알짜 이동 방향</dt><dd id="vNet">–</dd>
           <dt>현재 수위 차 (용액 − 물)</dt><dd id="vDh">0 m</dd>
+          <dt>최근 60초 평균 수위 차</dt><dd id="vAvg">–</dd>
           <dt>수위 차로 생긴 수압</dt><dd id="vHyd">0.0 atm</dd>
         </dl>
         <div class="bal" aria-label="삼투압과 수압 더하기 압력 비교">
@@ -216,11 +238,17 @@ var C=0.5, T=25, P=0, running=false, speedMul=1, simT=0;
 var water=[], solute=[], nL=N0, nR=N0, dispL=0.5, dispR=0.5;
 var crossLR=[], crossRL=[], samples=[], fx=[], limitHit=false, lastSample=-1;
 var trail=[], recs=[], lastEq=false, mission={on:false,hold:0,last:0};
+var KIND=[{n:"포도당",i:1,max:1.2},{n:"염화 나트륨",i:2,max:0.6},{n:"염화 칼슘",i:3,max:0.4}], kind=0;
+var pmode=false, SOL_VOL=5, NMIN_P=60;   // 입자 모드: 용질 1개 = 물 분자 5개 부피, 한쪽 물 분자 최소 60개
 
 function fOf(n){return 0.5*n/N0}
 function surfY(f){return TK.b-f*TH}
-function dhReal(){return (fOf(nR)-fOf(nL))*FULL_M}
-function piNow(){return C*R*(T+273)}
+function fLn(){return fOf(nL)}
+function fRn(){return fOf(nR+(pmode?SOL_VOL*solute.length:0))}
+function dhReal(){return (fRn()-fLn())*FULL_M}
+function nSolTarget(){return Math.round(KIND[kind].i*C*SOL_PER_M)}
+function piNow(){return KIND[kind].i*C*R*(T+273)}
+function avgDh(){ if(!samples.length) return null; var a=0,i; for(i=0;i<samples.length;i++) a+=samples[i][1]; return a/samples.length; }
 function rnd(a,b){return a+Math.random()*(b-a)}
 
 function newParticle(side,rad,top){
@@ -229,15 +257,15 @@ function newParticle(side,rad,top){
   return {x:rnd(x0,x1), y:rnd(top+rad,TK.b-rad), ux:Math.cos(a), uy:Math.sin(a), s:rnd(0.6,1.4), side:side};
 }
 function resetWater(){
-  water=[]; nL=N0; nR=N0; dispL=dispR=0.5;
+  water=[]; nL=N0; nR=pmode?N0-SOL_VOL*nSolTarget():N0; dispL=dispR=0.5;
   var top=surfY(0.5), i;
-  for(i=0;i<N0;i++) water.push(newParticle(0,WR,top));
-  for(i=0;i<N0;i++) water.push(newParticle(1,WR,top));
+  for(i=0;i<nL;i++) water.push(newParticle(0,WR,top));
+  for(i=0;i<nR;i++) water.push(newParticle(1,WR,top));
   solute=[]; syncSolute();
   crossLR=[]; crossRL=[]; samples=[]; fx=[]; trail=[]; simT=0; lastSample=-1; limitHit=false;
 }
 function syncSolute(){
-  var target=Math.round(C*SOL_PER_M);
+  var target=nSolTarget();
   while(solute.length<target) solute.push(newParticle(1,SR,surfY(dispR)));
   solute.length=target;
 }
@@ -246,14 +274,21 @@ function syncSolute(){
 function step(dt){
   simT+=dt;
   var vs=V0*Math.sqrt((T+273)/298);
-  var drive=piNow()-P-dhReal()/ATM_M;            // 물을 용액 쪽으로 끌어들이는 알짜 효과 (atm)
-  var b=0.9*Math.tanh(drive/6);
-  var pLR=0.5*(1+b), pRL=0.5*(1-b);
+  var b, pLR, pRL, mn=pmode?NMIN_P:NMIN;
+  if(pmode){
+    // 입자 모드: π = iCRT를 쓰지 않는다. 압력이 낮은 쪽으로는 항상, 높은 쪽으로는 exp(-|ΔP|/P0) 확률로 통과
+    var dP=P+dhReal()/ATM_M, q=Math.exp(-Math.abs(dP)/(0.123*(T+273)));
+    pLR=dP>0?q:1; pRL=dP<0?q:1; b=-dP;
+  } else {
+    var drive=piNow()-P-dhReal()/ATM_M;          // 물을 용액 쪽으로 끌어들이는 알짜 효과 (atm)
+    b=0.9*Math.tanh(drive/6);
+    pLR=0.5*(1+b); pRL=0.5*(1-b);
+  }
   limitHit=false;
-  if(nL<=NMIN){ if(b>0) limitHit=true; pLR=0; }
-  if(nR<=NMIN){ if(b<0) limitHit=true; pRL=0; }
-  dispL+=(fOf(nL)-dispL)*Math.min(1,dt*6);
-  dispR+=(fOf(nR)-dispR)*Math.min(1,dt*6);
+  if(nL<=mn){ if(b>0||pmode) limitHit=true; pLR=0; }
+  if(nR<=mn){ if(b<0) limitHit=true; pRL=0; }
+  dispL+=(fLn()-dispL)*Math.min(1,dt*6);
+  dispR+=(fRn()-dispR)*Math.min(1,dt*6);
   var sL=surfY(dispL), sR=surfY(dispR), common=Math.max(sL,sR)+3;
   var i,p,v,top,xa,xb;
   for(i=0;i<water.length;i++){
@@ -323,7 +358,7 @@ function draw(){
   for(x=TK.l;x<MX-MH;x+=8) ctx.lineTo(x,wave(x));
   ctx.lineTo(MX-MH,wave(MX-MH)); ctx.lineTo(MX-MH,TK.b); ctx.closePath(); ctx.fill();
   ctx.fillRect(MX+MH,sR,TK.r-MX-MH,TK.b-sR);
-  ctx.globalAlpha=C/1.2*0.13; ctx.fillStyle=K.solute; ctx.fillRect(MX+MH,sR,TK.r-MX-MH,TK.b-sR); ctx.globalAlpha=1;   // 농도가 진할수록 색이 진해진다
+  ctx.globalAlpha=Math.min(1,KIND[kind].i*C/1.2)*0.13; ctx.fillStyle=K.solute; ctx.fillRect(MX+MH,sR,TK.r-MX-MH,TK.b-sR); ctx.globalAlpha=1;   // 농도가 진할수록 색이 진해진다
   ctx.strokeStyle=K.water; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(TK.l,wave(TK.l));
   for(x=TK.l+8;x<MX-MH;x+=8) ctx.lineTo(x,wave(x));
   ctx.lineTo(MX-MH,wave(MX-MH)); ctx.moveTo(MX+MH,sR); ctx.lineTo(TK.r,sR); ctx.stroke();
@@ -412,7 +447,7 @@ function drawGraph(){
   gx.setTransform(dpr,0,0,dpr,0,0); gx.clearRect(0,0,w,h);
   var L=48,Rr=12,Tt=12,B=26, pw=w-L-Rr, ph=h-Tt-B;
   var t1=Math.max(60,simT), t0=t1-60;
-  var eq=Math.max(-420,Math.min(420,(piNow()-P)*ATM_M));
+  var lim=pmode?480:420, eq=Math.max(-lim,Math.min(lim,(piNow()-P)*ATM_M));
   var lo=Math.min(0,eq), hi=Math.max(0,eq), i;
   for(i=0;i<samples.length;i++){ if(samples[i][1]<lo)lo=samples[i][1]; if(samples[i][1]>hi)hi=samples[i][1]; }
   if(hi-lo<40){hi+=20;lo-=20} var pad=(hi-lo)*0.12; hi+=pad; lo-=pad;
@@ -439,11 +474,14 @@ function drawGraph(){
 /* ---------- 숫자 패널 ---------- */
 function ui(){
   var pi=piNow(), dh=dhReal(), hyd=dh/ATM_M, lr=crossLR.length, rl=crossRL.length, net=lr-rl;
+  var ki=KIND[kind].i, av=avgDh();
   $("oC").textContent=C.toFixed(2)+" mol/L";
+  $("oIC").textContent="입자 농도 iC = "+ki+" × "+C.toFixed(2)+" = "+(ki*C).toFixed(2)+" mol/L (화면의 용질 입자 "+solute.length+"개)";
+  $("vAvg").textContent=av===null?"–":fmtM(av);
   $("oT").textContent=T+" ℃ ("+(T+273)+" K)";
   $("oP").textContent=P+" atm";
   $("vPi").textContent=pi.toFixed(1)+" atm";
-  $("vFormula").textContent=C.toFixed(2)+" × 0.082 × "+(T+273)+" = "+pi.toFixed(1)+" atm";
+  $("vFormula").textContent=ki+" × "+C.toFixed(2)+" × 0.082 × "+(T+273)+" = "+pi.toFixed(1)+" atm";
   $("vLR").textContent=lr+"개"; $("vRL").textContent=rl+"개";
   $("vDh").textContent=fmtM(dh); $("vHyd").textContent=hyd.toFixed(1)+" atm";
   var thr=1.5*Math.sqrt(lr+rl)+2, netTxt, chip=$("chip"), cls="chip", ct;
@@ -473,6 +511,7 @@ function ui(){
   $("tPi").textContent=pi.toFixed(1)+" atm"; $("tHP").textContent=(hyd+P).toFixed(1)+" atm";
   var msg;
   if(limitHit) msg="화면 속 용기가 꽉 차서 물이 더 넘어가지 못합니다. 실제라면 평형이 될 때까지 계속 이동합니다.";
+  else if(pmode) msg="입자 모드에서는 통과 확률에 π = iCRT를 쓰지 않습니다. 수압 + P가 π 근처에서 멈추는지 60초 평균 수위 차로 비교해 보세요.";
   else if(P>pi && netTxt.indexOf("평형")>=0 && simT>3) msg="P가 π보다 커서 물이 순수한 물 쪽으로 넘어갔습니다(역삼투). 지금은 왼쪽 수위가 높아져서 다시 균형이 맞았습니다.";
   else if(P>pi) msg="P가 π보다 커서 물이 용액에서 순수한 물 쪽으로 밀려 나가고 있습니다(역삼투).";
   else msg="두 막대 길이가 비슷해지면(수압 + P = π) 양쪽으로 넘어가는 물의 양이 같아집니다.";
@@ -482,49 +521,63 @@ function ui(){
 }
 
 /* ---------- 조작 ---------- */
-function readSliders(){ C=parseFloat(sC.value); T=parseFloat(sT.value); P=parseFloat(sP.value); syncSolute(); ui(); }
+function applyC(){ var c=parseFloat(sC.value), ch=c!==C; C=c; if(pmode&&ch) resetWater(); else syncSolute(); }   // 입자 모드에서 농도가 바뀌면 처음부터
+function readSliders(){ T=parseFloat(sT.value); P=parseFloat(sP.value); applyC(); ui(); }
+function press(box,attr,val){ var bs=$(box).querySelectorAll("button"), i; for(i=0;i<bs.length;i++) bs[i].setAttribute("aria-pressed",bs[i].getAttribute(attr)===String(val)?"true":"false"); }
+function setKind(k){ kind=k; sC.max=KIND[k].max; if(parseFloat(sC.value)>KIND[k].max) sC.value=KIND[k].max; press("segKind","data-k",k); }
+function setMode(m){
+  pmode=m; press("segMode","data-m",m?1:0);
+  $("modeNote").textContent=m?"π = iCRT를 쓰지 않습니다. 용질 입자가 자리를 차지하는 것과 압력 차에 따른 통과 확률만으로 물이 이동합니다. 농도나 용질 종류를 바꾸면 처음부터 다시 시작합니다."
+    :"π = iCRT로 계산한 값에 맞춰 물 분자가 막을 통과할 확률을 정합니다.";
+}
+$("segKind").addEventListener("click",function(e){ var b=e.target.closest("button"); if(!b) return;
+  setKind(+b.getAttribute("data-k")); C=parseFloat(sC.value); if(pmode) resetWater(); else syncSolute(); ui(); });
+$("segMode").addEventListener("click",function(e){ var b=e.target.closest("button"); if(!b) return;
+  var m=b.getAttribute("data-m")==="1"; if(m===pmode) return; setMode(m); resetWater(); ui(); });
 [sC,sT,sP].forEach(function(s){ s.addEventListener("input",readSliders); s.addEventListener("change",readSliders); });
 function setRun(v){ running=v; ui(); }
 $("bStart").addEventListener("click",function(){setRun(true)});
 $("bPause").addEventListener("click",function(){setRun(false)});
 $("bReset").addEventListener("click",function(){
-  sC.value=0.5; sT.value=25; sP.value=0; running=false; C=0.5;T=25;P=0; resetWater(); endMission();
+  setKind(0); sC.value=0.5; sT.value=25; sP.value=0; running=false; C=0.5;T=25;P=0; resetWater(); endMission();
   $("lifeBox").innerHTML='<p class="hint">버튼을 누르면 그 상황에 맞는 조건으로 바뀌고 바로 실험이 시작됩니다.</p>'; ui();
 });
-$("bSpeed").addEventListener("click",function(){ speedMul=speedMul===1?2:speedMul===2?4:1; this.textContent="배속 ×"+speedMul; });
+$("bSpeed").addEventListener("click",function(){ speedMul=speedMul>=8?1:speedMul*2; this.textContent="배속 ×"+speedMul; });
 function endMission(){ mission.on=false; mission.hold=0; $("mBar").style.width="0"; $("mMsg").textContent=""; }
 function renderRecs(){
   var h="", i, r;
   for(i=0;i<recs.length;i++){ r=recs[i];
-    h+="<tr><td>"+(i+1)+"</td><td>"+r.C.toFixed(2)+"</td><td>"+r.T+"</td><td>"+r.P+"</td><td>"+r.pi.toFixed(1)+" atm</td><td>"+fmtM(r.dh)+"</td><td>"+r.m.toFixed(1)+" atm</td><td>"+
+    h+="<tr><td>"+(i+1)+"</td><td>"+r.mode+"</td><td>"+r.k+"</td><td>"+r.C.toFixed(2)+"</td><td>"+r.T+"</td><td>"+r.P+"</td><td>"+r.pi.toFixed(1)+" atm</td><td>"+fmtM(r.dh)+"</td><td>"+r.m.toFixed(1)+" atm</td><td>"+
       (r.pi>0?((r.m-r.pi)/r.pi*100>0?"+":"")+((r.m-r.pi)/r.pi*100).toFixed(1)+" %":"–")+"</td><td>"+(r.eq?"평형":"이동 중")+"</td></tr>"; }
   $("recBody").innerHTML=h; $("recWrap").hidden=!recs.length;
 }
 $("bRec").addEventListener("click",function(){
-  var dh=dhReal(); recs.push({C:C,T:T,P:P,pi:piNow(),dh:dh,m:dh/ATM_M+P,eq:lastEq&&running});
+  var av=avgDh(), dh=pmode&&av!==null?av:dhReal();   // 입자 모드는 흔들림이 커서 60초 평균으로 기록
+  recs.push({mode:pmode?"입자 (60초 평균)":"식",k:KIND[kind].n,C:C,T:T,P:P,pi:piNow(),dh:dh,m:dh/ATM_M+P,eq:lastEq&&running});
   if(recs.length>12) recs.shift(); renderRecs();
 });
 $("bRecClear").addEventListener("click",function(){ recs=[]; renderRecs(); });
 $("bMission").addEventListener("click",function(){
-  var c=Math.round(rnd(0.4,1.2)*20)/20, t=Math.round(rnd(10,60));
-  preset(c,t,0,'<p class="hint">버튼을 누르면 그 상황에 맞는 조건으로 바뀌고 바로 실험이 시작됩니다.</p>');
+  var c=Math.min(KIND[kind].max,Math.round(rnd(0.4,1.2)/KIND[kind].i*20)/20), t=Math.round(rnd(10,60));
+  preset(kind,c,t,0,'<p class="hint">버튼을 누르면 그 상황에 맞는 조건으로 바뀌고 바로 실험이 시작됩니다.</p>');
   mission.on=true; mission.hold=0; mission.last=0;
 });
-function preset(c,t,p,html){
-  endMission();
+function preset(k,c,t,p,html){
+  endMission(); setKind(k);
   sC.value=c; sT.value=t; sP.value=p; C=c;T=t;P=p; resetWater(); $("lifeBox").innerHTML=html; setRun(true);
 }
 $("bCabbage").addEventListener("click",function(){
-  preset(1.2,20,0,
+  preset(1,0.6,20,0,
     '<p><b>배추 절이기</b></p>'+
+    '<p>소금물은 염화 나트륨 0.6 mol/L, 20 ℃로 맞췄습니다. 염화 나트륨은 물에서 이온 2개로 나뉘므로 입자 농도는 1.2 mol/L입니다.</p>'+
     '<p>왼쪽을 배추 세포 속, 오른쪽을 진한 소금물이라고 보면 됩니다. 소금물이 세포 속보다 훨씬 진하기 때문에 물이 세포막(반투막)을 지나 소금물 쪽으로 빠져나갑니다. '+
     '소금 입자는 막을 거의 통과하지 못해서 물만 빠지고, 그래서 배추의 숨이 죽고 부피가 줄어듭니다.</p>');
 });
 $("bDesal").addEventListener("click",function(){
-  var pi=(1.1*R*298).toFixed(1);
-  preset(1.1,25,0,
+  var pi=(2*0.55*R*298).toFixed(1);
+  preset(1,0.55,25,0,
     '<p><b>해수 담수화</b></p>'+
-    '<p>오른쪽이 바닷물(C = 1.1 mol/L, 25 ℃)이고 왼쪽이 우리가 얻으려는 담수입니다. 이 조건에서 삼투압은 약 '+pi+' atm입니다.</p>'+
+    '<p>오른쪽이 바닷물(염화 나트륨 0.55 mol/L, 입자 농도 1.1 mol/L, 25 ℃)이고 왼쪽이 우리가 얻으려는 담수입니다. 이 조건에서 삼투압은 약 '+pi+' atm입니다.</p>'+
     '<p>가만히 두면 오히려 담수가 바닷물 쪽으로 넘어갑니다. 그런데 압력 P를 π보다 크게 걸어 주면 물이 거꾸로 바닷물에서 담수 쪽으로 밀려 나오고, 용질은 막에 걸러집니다. 이것을 역삼투라고 합니다.</p>'+
     '<div class="btns"><button id="bRO" type="button" class="primary">P를 40 atm으로 올려서 역삼투 확인하기</button></div>');
   $("bRO").addEventListener("click",function(){ sP.value=40; readSliders(); });
@@ -542,7 +595,7 @@ function frame(ts){
 readColors();
 try{ var mq=window.matchMedia("(prefers-color-scheme: dark)"); (mq.addEventListener?mq.addEventListener("change",readColors):mq.addListener(readColors)); }catch(e){}
 try{ new MutationObserver(readColors).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]}); }catch(e){}
-resetWater(); readSliders(); requestAnimationFrame(frame);
+setKind(0); setMode(false); resetWater(); readSliders(); requestAnimationFrame(frame);
 })();
 </script>
 </body>
