@@ -87,7 +87,7 @@ ul.simple{margin:8px 0 0;padding-left:1.2em;font-size:.88rem;color:var(--muted)}
 <div class="wrap">
   <header>
     <h1>삼투압 시뮬레이션</h1>
-    <p>반투막을 사이에 둔 순수한 물과 용액. 농도·온도·압력을 바꾸며 물의 이동과 반트호프 법칙 π = CRT를 확인합니다.</p>
+    <p>가운데 반투막을 두고 왼쪽에는 순수한 물, 오른쪽에는 용액을 넣었습니다. 농도, 온도, 압력을 바꿔 가면서 물이 어느 쪽으로 움직이는지 살펴봅니다.</p>
   </header>
 
   <div class="grid">
@@ -98,7 +98,7 @@ ul.simple{margin:8px 0 0;padding-left:1.2em;font-size:.88rem;color:var(--muted)}
           <span><i class="dot-w"></i>물 분자 (막의 구멍 통과)</span>
           <span><i class="dot-s"></i>용질 입자 (막에서 튕김)</span>
         </div>
-        <p class="note">※ 축소 표시: 실제 수위 차는 수백 m에 이릅니다. 화면에서는 용기 높이 전체가 600 m가 되도록 줄여서 그렸고, 입자와 막의 구멍은 보이도록 크게 그렸습니다.</p>
+        <p class="note">※ 실제로는 수위 차가 수백 m나 되기 때문에 화면에는 축소해서 그렸습니다. 용기 높이 전체가 600 m에 해당합니다. 반대로 입자와 막의 구멍은 눈에 보이도록 실제보다 훨씬 크게 그렸습니다.</p>
         <div class="btns">
           <button id="bStart" class="primary" type="button">시작</button>
           <button id="bPause" type="button" disabled>일시정지</button>
@@ -143,7 +143,7 @@ ul.simple{margin:8px 0 0;padding-left:1.2em;font-size:.88rem;color:var(--muted)}
           <span>π</span><div class="track"><div id="barPi" style="background:var(--solute)"></div></div><em id="tPi"></em>
           <span>수압 + P</span><div class="track"><div id="barH" style="background:var(--water)"></div><div id="barP" style="background:var(--piston)"></div></div><em id="tHP"></em>
         </div>
-        <p class="note" id="vMsg">두 막대의 길이가 같아지면 물의 알짜 이동이 멈춥니다.</p>
+        <p class="note" id="vMsg">두 막대 길이가 비슷해지면(수압 + P = π) 양쪽으로 넘어가는 물의 양이 같아집니다.</p>
       </section>
 
       <section class="card">
@@ -157,7 +157,7 @@ ul.simple{margin:8px 0 0;padding-left:1.2em;font-size:.88rem;color:var(--muted)}
           <button id="bCabbage" type="button">배추 절이기</button>
           <button id="bDesal" type="button">해수 담수화</button>
         </div>
-        <div id="lifeBox"><p class="hint">버튼을 누르면 조건이 자동으로 맞춰지고 실험이 시작됩니다.</p></div>
+        <div id="lifeBox"><p class="hint">버튼을 누르면 그 상황에 맞는 조건으로 바뀌고 바로 실험이 시작됩니다.</p></div>
       </section>
     </div>
   </div>
@@ -397,10 +397,10 @@ function ui(){
   $("barP").style.width=(P/mx*100)+"%";
   $("tPi").textContent=pi.toFixed(1)+" atm"; $("tHP").textContent=(hyd+P).toFixed(1)+" atm";
   var msg;
-  if(limitHit) msg="화면 용기의 한계에 닿아 물이 더 이동하지 못합니다. 실제로는 평형이 될 때까지 계속 이동합니다.";
-  else if(P>pi && netTxt.indexOf("평형")>=0 && simT>3) msg="P가 π보다 커서 물이 순수한 물 쪽으로 넘어갔고(역삼투), 지금은 반대쪽 수위가 높아져 균형을 이뤘습니다.";
-  else if(P>pi) msg="P가 π보다 큽니다. 물이 용액에서 순수한 물 쪽으로 밀려 나갑니다 (역삼투).";
-  else msg="두 막대의 길이가 같아지면 (수압 + P = π) 물의 알짜 이동이 멈춥니다.";
+  if(limitHit) msg="화면 속 용기가 꽉 차서 물이 더 넘어가지 못합니다. 실제라면 평형이 될 때까지 계속 이동합니다.";
+  else if(P>pi && netTxt.indexOf("평형")>=0 && simT>3) msg="P가 π보다 커서 물이 순수한 물 쪽으로 넘어갔습니다(역삼투). 지금은 왼쪽 수위가 높아져서 다시 균형이 맞았습니다.";
+  else if(P>pi) msg="P가 π보다 커서 물이 용액에서 순수한 물 쪽으로 밀려 나가고 있습니다(역삼투).";
+  else msg="두 막대 길이가 비슷해지면(수압 + P = π) 양쪽으로 넘어가는 물의 양이 같아집니다.";
   $("vMsg").textContent=msg;
   $("bStart").disabled=running; $("bPause").disabled=!running;
   $("bStart").className=running?"":"primary";
@@ -414,7 +414,7 @@ $("bStart").addEventListener("click",function(){setRun(true)});
 $("bPause").addEventListener("click",function(){setRun(false)});
 $("bReset").addEventListener("click",function(){
   sC.value=0.5; sT.value=25; sP.value=0; running=false; C=0.5;T=25;P=0; resetWater();
-  $("lifeBox").innerHTML='<p class="hint">버튼을 누르면 조건이 자동으로 맞춰지고 실험이 시작됩니다.</p>'; ui();
+  $("lifeBox").innerHTML='<p class="hint">버튼을 누르면 그 상황에 맞는 조건으로 바뀌고 바로 실험이 시작됩니다.</p>'; ui();
 });
 $("bSpeed").addEventListener("click",function(){ speedMul=speedMul===1?2:speedMul===2?4:1; this.textContent="배속 ×"+speedMul; });
 function preset(c,t,p,html){
@@ -422,16 +422,17 @@ function preset(c,t,p,html){
 }
 $("bCabbage").addEventListener("click",function(){
   preset(1.2,20,0,
-    '<p><b>배추 절이기</b> · 왼쪽은 배추 세포 속(묽음), 오른쪽은 진한 소금물이라고 생각하세요.</p>'+
-    '<p>소금물의 농도가 세포 속보다 훨씬 높아서, 물이 세포막(반투막)을 지나 소금물 쪽으로 빠져나갑니다. '+
-    '소금 입자는 막을 잘 통과하지 못하므로 물만 이동하고, 물을 잃은 배추는 숨이 죽어 부피가 줄어듭니다.</p>');
+    '<p><b>배추 절이기</b></p>'+
+    '<p>왼쪽을 배추 세포 속, 오른쪽을 진한 소금물이라고 보면 됩니다. 소금물이 세포 속보다 훨씬 진하기 때문에 물이 세포막(반투막)을 지나 소금물 쪽으로 빠져나갑니다. '+
+    '소금 입자는 막을 거의 통과하지 못해서 물만 빠지고, 그래서 배추의 숨이 죽고 부피가 줄어듭니다.</p>');
 });
 $("bDesal").addEventListener("click",function(){
   var pi=(1.1*R*298).toFixed(1);
   preset(1.1,25,0,
-    '<p><b>해수 담수화</b> · 오른쪽이 바닷물(C = 1.1 mol/L, 25 ℃), 왼쪽이 얻고 싶은 담수입니다. 이때 삼투압은 π ≈ '+pi+' atm입니다.</p>'+
-    '<p>그대로 두면 담수가 바닷물 쪽으로 넘어갑니다. 압력 P를 π보다 크게 올리면 물이 반대로 바닷물에서 담수 쪽으로 밀려 나오고, 용질은 막에 걸러집니다. 이것이 역삼투입니다.</p>'+
-    '<div class="btns"><button id="bRO" type="button" class="primary">P를 40 atm으로 올려 역삼투 보기</button></div>');
+    '<p><b>해수 담수화</b></p>'+
+    '<p>오른쪽이 바닷물(C = 1.1 mol/L, 25 ℃)이고 왼쪽이 우리가 얻으려는 담수입니다. 이 조건에서 삼투압은 약 '+pi+' atm입니다.</p>'+
+    '<p>가만히 두면 오히려 담수가 바닷물 쪽으로 넘어갑니다. 그런데 압력 P를 π보다 크게 걸어 주면 물이 거꾸로 바닷물에서 담수 쪽으로 밀려 나오고, 용질은 막에 걸러집니다. 이것을 역삼투라고 합니다.</p>'+
+    '<div class="btns"><button id="bRO" type="button" class="primary">P를 40 atm으로 올려서 역삼투 확인하기</button></div>');
   $("bRO").addEventListener("click",function(){ sP.value=40; readSliders(); });
 });
 
