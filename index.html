@@ -500,7 +500,7 @@ function ui(){
   $("tPi").textContent=pb.toFixed(1)+" atm"; $("tHP").textContent=(hyd+P).toFixed(1)+" atm";
   var msg;
   if(limitHit) msg="화면 속 용기가 꽉 차서 물이 더 넘어가지 못합니다. 실제라면 평형이 될 때까지 계속 이동합니다.";
-  else if(pmode) msg="입자 모드에서는 통과 확률에 π = iCRT를 쓰지 않습니다. 물이 넘어오면 용액이 묽어지므로, 수압 + P가 현재 농도 기준 삼투압 근처에서 멈추는지 비교해 보세요.";
+  else if(pmode) msg="입자 모드에서는 물이 넘어올수록 용액이 묽어집니다. 그래서 수압 + P는 지금 농도로 계산한 삼투압과 비교해야 합니다.";
   else if(P>pi && netTxt.indexOf("평형")>=0 && simT>3) msg="P가 π보다 커서 물이 순수한 물 쪽으로 넘어갔습니다(역삼투). 지금은 왼쪽 수위가 높아져서 다시 균형이 맞았습니다.";
   else if(P>pi) msg="P가 π보다 커서 물이 용액에서 순수한 물 쪽으로 밀려 나가고 있습니다(역삼투).";
   else msg="두 막대 길이가 비슷해지면(수압 + P = π) 양쪽으로 넘어가는 물의 양이 같아집니다.";
@@ -516,8 +516,8 @@ function press(box,attr,val){ var bs=$(box).querySelectorAll("button"), i; for(i
 function setKind(k){ kind=k; sC.max=KIND[k].max; if(parseFloat(sC.value)>KIND[k].max) sC.value=KIND[k].max; press("segKind","data-k",k); }
 function setMode(m){
   pmode=m; press("segMode","data-m",m?1:0);
-  $("modeNote").textContent=m?"π = iCRT를 쓰지 않습니다. 용질 입자가 자리를 차지하는 것과 압력 차에 따른 통과 확률만으로 물이 이동합니다. 농도나 용질 종류를 바꾸면 처음부터 다시 시작합니다."
-    :"π = iCRT로 계산한 값에 맞춰 물 분자가 막을 통과할 확률을 정합니다.";
+  $("modeNote").textContent=m?"이 모드에서는 π = iCRT 식을 쓰지 않습니다. 용질 입자가 자리를 차지한다는 것과, 압력이 높은 쪽으로는 물이 넘어가기 어렵다는 규칙만 넣었습니다. 농도나 용질 종류를 바꾸면 처음부터 다시 시작합니다."
+    :"π = iCRT로 계산한 삼투압에 맞춰서 물 분자가 막을 통과할 확률을 정하는 방식입니다.";
 }
 $("segKind").addEventListener("click",function(e){ var b=e.target.closest("button"); if(!b) return;
   setKind(+b.getAttribute("data-k")); C=parseFloat(sC.value); if(pmode) resetWater(); else syncSolute(); ui(); });
